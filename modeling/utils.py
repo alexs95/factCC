@@ -59,7 +59,8 @@ class InputFeatures(object):
 
     def __init__(self, input_ids, input_mask, segment_ids, label_id,
                  extraction_mask=None, extraction_start_ids=None, extraction_end_ids=None,
-                 augmentation_mask=None, augmentation_start_ids=None, augmentation_end_ids=None):
+                 augmentation_mask=None, augmentation_start_ids=None, augmentation_end_ids=None, identifier=None):
+        self.identifier = identifier
         self.input_ids = input_ids
         self.input_mask = input_mask
         self.segment_ids = segment_ids
@@ -164,7 +165,7 @@ class FactCCManualProcessor(DataProcessor):
         """Creates examples for the training and dev sets."""
         examples = []
         for (i, example) in enumerate(lines):
-            guid = str(i)
+            guid = example["id"]
             text_a = example["text"]
             text_b = example["claim"]
             label = example["label"]
@@ -332,7 +333,10 @@ def convert_examples_to_features(examples, label_list, max_seq_length,
                           extraction_end_ids=extraction_end_ids,
                           augmentation_mask=augmentation_mask,
                           augmentation_start_ids=augmentation_start_ids,
-                          augmentation_end_ids=augmentation_end_ids))
+                          augmentation_end_ids=augmentation_end_ids,
+                          identifier=example.guid
+            )
+        )
     return features
 
 def _truncate_seq_pair(tokens_a, tokens_b, max_length):

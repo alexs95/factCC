@@ -57,10 +57,12 @@ def set_seed(args):
 
 
 def make_model_input(args, batch):
-    inputs = {'input_ids':        batch[0],
-              'attention_mask':   batch[1],
-              'token_type_ids':   batch[2],
-              'labels':           batch[3]}
+    inputs = {
+      'input_ids':        batch[0],
+      'attention_mask':   batch[1],
+      'token_type_ids':   batch[2],
+      'labels':           batch[3]
+    }
 
     # add extraction and augmentation spans for PointerBert model
     if args.model_type == "pbert":
@@ -212,7 +214,7 @@ def evaluate(args, model, tokenizer, prefix=""):
     results = {}
     cnt = 0
     for eval_task, eval_output_dir in zip(eval_task_names, eval_outputs_dirs):
-        eval_dataset = load_and_cache_examples(args, eval_task, tokenizer, evaluate=True)
+        eval_dataset, identifiers = load_and_cache_examples(args, eval_task, tokenizer, evaluate=True)
 
         if not os.path.exists(eval_output_dir) and args.local_rank in [-1, 0]:
             os.makedirs(eval_output_dir)
@@ -222,7 +224,6 @@ def evaluate(args, model, tokenizer, prefix=""):
         eval_sampler = SequentialSampler(eval_dataset) if args.local_rank == -1 else DistributedSampler(eval_dataset)
         eval_dataloader = DataLoader(eval_dataset, sampler=eval_sampler, batch_size=args.eval_batch_size)
 
-        # Eval!
         logger.info("***** Running evaluation {} *****".format(prefix))
         logger.info("  Num examples = %d", len(eval_dataset))
         logger.info("  Batch size = %d", args.eval_batch_size)
@@ -231,6 +232,7 @@ def evaluate(args, model, tokenizer, prefix=""):
         nb_eval_steps = 0
         preds = None
         out_label_ids = None
+        out_input_ids = None
 
         for batch in tqdm(eval_dataloader, desc="Evaluating"):
             model.eval()
@@ -250,11 +252,21 @@ def evaluate(args, model, tokenizer, prefix=""):
             if preds is None:
                 preds = logits.detach().cpu().numpy()
                 out_label_ids = inputs['labels'].detach().cpu().numpy()
+                out_input_ids = inputs['input_ids'].detach().cpu().numpy()
             else:
                 preds = np.append(preds, logits.detach().cpu().numpy(), axis=0)
                 out_label_ids = np.append(out_label_ids, inputs['labels'].detach().cpu().numpy(), axis=0)
+                out_input_ids = np.append(out_input_ids, inputs['input_ids'].detach().cpu().numpy(), axis=0)
 
+        # Save evaluation/dataset/correct/
+        # Save evaluation/dataset/incorrect/
         preds = np.argmax(preds, axis=1)
+        print("\n\n\n\nThe predictions are:")
+        print(identifiers)
+        print(out_input_ids)
+        print(out_label_ids)
+        print(preds)
+        print("\n\n\n\n")
         result = compute_metrics(args.task_name, preds, out_label_ids)
         eval_loss = eval_loss / nb_eval_steps
         result["loss"] = eval_loss
@@ -306,6 +318,7 @@ def load_and_cache_examples(args, task, tokenizer, evaluate=False):
         torch.distributed.barrier()  # Make sure only the first process in distributed training process the dataset, and the others will use the cache
 
     # Convert to Tensors and build dataset
+    identifiers = [f.identifier for f in features]
     all_input_ids = torch.tensor([f.input_ids for f in features], dtype=torch.long)
     all_input_mask = torch.tensor([f.input_mask for f in features], dtype=torch.long)
     all_segment_ids = torch.tensor([f.segment_ids for f in features], dtype=torch.long)
@@ -323,7 +336,7 @@ def load_and_cache_examples(args, task, tokenizer, evaluate=False):
 
     dataset = TensorDataset(all_input_ids, all_input_mask, all_segment_ids, all_label_ids,
                             all_ext_mask, all_ext_start_ids, all_ext_end_ids,
-                            all_aug_mask, all_aug_start_ids, all_aug_end_ids)
+                            all_aug_mask, all_aug_start_ids, all_aug_end_ids), identifiers
     return dataset
 
 
