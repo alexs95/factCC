@@ -1,15 +1,16 @@
 #!/bin/sh
 #SBATCH -p GpuQ
-#SBATCH -N 1
-#SBATCH -t 00:10:00
-#SBATCH -A account
-
-cd $SLURM_SUBMIT_DIR
+#SBATCH --nodes 1
+#SBATCH --time 00:10:00
+#SBATCH -A project
+#SBATCH --mail-user=email@domain.com
+#SBATCH --mail-type=BEGIN,END
 
 module load cuda/11.2
 module load conda/2
 
+conda init
 source activate summarization3.7
 
-echo "This is the GpuQ run."
+cd $SLURM_SUBMIT_DIR
 time python modeling/score.py --mode evaluate
