@@ -17,12 +17,16 @@ MODEL_NAME = "bert-base-uncased"
 
 
 class FactCC:
-    def __init__(self, checkpoint, path, batch_size, max_seq_length, gpu=None, method="sentence"):
+    def __init__(self, checkpoint, path, batch_size, max_seq_length, gpu, method="sentence"):
         self.checkpoint = checkpoint
         self.batch_size = batch_size
         self.max_seq_length = max_seq_length
-        self.gpu = gpu
         self.method = method
+
+        # Configure GPU
+        self.gpu = None
+        if gpu:
+            self.gpu = torch.cuda.current_device()
 
         # Configure paths
         self.path = path
@@ -198,7 +202,7 @@ def parse_args():
     data = os.path.join(base, "../data/cnndm/")
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--gpu', type=str, help='Specify GPU card to use.', default=None)
+    parser.add_argument('--gpu', dest='gpu', action='store_true', default=False)
     parser.add_argument('--data', type=str, help='Path to cnn/dm dataset.', default=data)
     parser.add_argument('--evaluation', type=str, help='Path to evaluation directory.', default=evaluation)
     parser.add_argument('--checkpoint', type=str, help='Path to factcc checkpoint directory.', default=checkpoint)
@@ -212,6 +216,7 @@ if __name__ == '__main__':
     factCC = FactCC(
         checkpoint=args.checkpoint,
         path=args.evaluation,
+        gpu=args.gpu,
         batch_size=512,
         max_seq_length=12,
         method="sentence"

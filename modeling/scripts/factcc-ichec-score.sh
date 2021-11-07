@@ -13,4 +13,4 @@ conda init
 source activate summarization3.7
 
 cd $SLURM_SUBMIT_DIR
-time python modeling/score.py --mode evaluate
+time python modeling/score.py --gpu --mode evaluate
