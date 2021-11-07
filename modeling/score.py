@@ -1,13 +1,13 @@
 from pytorch_transformers import (BertForSequenceClassification, BertTokenizer)
-from factCC.modeling.utils import convert_examples_to_features, InputExample
+from utils import convert_examples_to_features, InputExample
 from torch.utils.data import (DataLoader, SequentialSampler, TensorDataset)
 import torch.nn.functional as F
-from datetime import datetime
 from fastparquet import write
 from pathlib import Path
 from loader import load
 from tqdm import tqdm
 import pandas as pd
+import argparse
 import torch
 import uuid
 import os
@@ -27,7 +27,7 @@ class FactCC:
         # Configure paths
         self.path = path
         self.features_dir = os.path.join(self.path, "features")
-        self.features_path = os.path.join(self.features_dir, "features.torch")
+        self.features_path = os.path.join(self.features_dir, "features.pkl")
         self.dataset_dir = os.path.join(self.path, "dataset")
         self.scores_dir = os.path.join(self.path, "scores")
         self._create_dirs()
@@ -119,7 +119,7 @@ class FactCC:
             float_format='%.5f'
         )
 
-    def preprocess(self, ids, stories, summaries, format='csv'):
+    def preprocess(self, ids, stories, summaries, dataset_format='csv'):
         examples = self._create_examples(ids, stories, summaries)
         features = convert_examples_to_features(
             examples=examples,
@@ -137,7 +137,7 @@ class FactCC:
             pad_token_segment_id=0
         )
 
-        self._save_dataset(examples, format)
+        self._save_dataset(examples, dataset_format)
         torch.save(features, self.features_path)
 
     def run(self):
@@ -191,19 +191,35 @@ class FactCC:
         return scores.groupby(['storyid', 'claimid']).max()['score'].mean()
 
 
-if __name__ == '__main__':
+def parse_args():
     base = Path(__file__).parent.parent.resolve()
-    # path = os.path.join(base, "evaluation", datetime.now().strftime("%Y%m%d_%H%M"))
-    path = os.path.join(base, "evaluation", "10000_sample")
+    evaluation = os.path.join(base, "evaluation", "1000_sample")
+    checkpoint = os.path.join(base, "checkpoint/factcc-checkpoint")
+    data = os.path.join(base, "../data/cnndm/")
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--gpu', type=str, help='Specify GPU card to use.', default=None)
+    parser.add_argument('--data', type=str, help='Path to cnn/dm dataset.', default=data)
+    parser.add_argument('--evaluation', type=str, help='Path to evaluation directory.', default=evaluation)
+    parser.add_argument('--checkpoint', type=str, help='Path to factcc checkpoint directory.', default=checkpoint)
+    parser.add_argument('--mode', type=str, help='Evaluate or preprocess.', choices=["preprocess", "evaluate"])
+
+    return parser.parse_args()
+
+
+if __name__ == '__main__':
+    args = parse_args()
     factCC = FactCC(
-        checkpoint=os.path.join(base, "checkpoint/factcc-checkpoint"),
-        path=path,
+        checkpoint=args.checkpoint,
+        path=args.evaluation,
         batch_size=512,
         max_seq_length=12,
         method="sentence"
     )
-    # ids, stories, summaries = load(os.path.join(base, "../data/cnndm/"), 10000)
-    # factCC.preprocess(ids, stories, summaries, format='parquet')
-    # Need to add a loading bar for loading the data.
-    score = factCC.run()
-    print(score)
+    if args.mode == "preprocess":
+        ids, stories, summaries = load(args.data, 1000)
+        factCC.preprocess(ids, stories, summaries, dataset_format='parquet')
+    else:
+        # Need to add a loading bar for loading the data.
+        score = factCC.run()
+        print(score)

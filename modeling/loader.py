@@ -2,8 +2,6 @@ import os
 import glob
 from tqdm import tqdm
 
-from factCC.modeling.utils import InputExample
-
 dm_single_close_quote = u'\u2019' # unicode
 dm_double_close_quote = u'\u201d'
 END_TOKENS = ['.', '!', '?', '...', "'", "`", '"', dm_single_close_quote, dm_double_close_quote, ")"] # acceptable ways to end a sentence
