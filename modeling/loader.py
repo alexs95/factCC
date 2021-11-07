@@ -49,7 +49,7 @@ def get_art_abs(story_file):
 def load(stories_dir, sample=None):
     stories = []
     summaries = []
-    identifiers = []
+    ids = []
     count = 0
     for file in tqdm(glob.glob(stories_dir + '**/*.story', recursive=True), "Loading stories", total=sample):
         if count == sample:
@@ -57,7 +57,12 @@ def load(stories_dir, sample=None):
         story, summary = get_art_abs(file)
         stories.append(story)
         summaries.append(summary)
-        identifiers.append(os.path.basename(file))
+        ids.append(os.path.basename(file))
         count += 1
 
-    return stories, summaries, identifiers
+    return ids, stories, summaries
+
+    # nlp = spacy.load('en')
+    # neuralcoref.add_to_pipe(nlp)
+    # story = nlp(story)
+    # summary = nlp(summary)

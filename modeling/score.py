@@ -1,17 +1,16 @@
-from datetime import datetime
-
-from fastparquet import write
-import uuid
-import os
-from tqdm import tqdm
-from loader import load
 from pytorch_transformers import (BertForSequenceClassification, BertTokenizer)
-from torch.utils.data import (DataLoader, SequentialSampler, TensorDataset)
 from factCC.modeling.utils import convert_examples_to_features, InputExample
+from torch.utils.data import (DataLoader, SequentialSampler, TensorDataset)
 import torch.nn.functional as F
+from datetime import datetime
+from fastparquet import write
+from pathlib import Path
+from loader import load
+from tqdm import tqdm
 import pandas as pd
 import torch
-from pathlib import Path
+import uuid
+import os
 
 
 MODEL_NAME = "bert-base-uncased"
@@ -42,7 +41,7 @@ class FactCC:
         Path(self.dataset_dir).mkdir(parents=True, exist_ok=True)
         Path(self.scores_dir).mkdir(parents=True, exist_ok=True)
 
-    def _create_examples(self, stories, summaries, ids):
+    def _create_examples(self, ids, stories, summaries):
         examples = []
         if ids is None:
             ids = range(len(stories))
@@ -88,7 +87,7 @@ class FactCC:
 
         return dataset, storyids, claimids, sentids
 
-    def _save_dataset(self, examples, format='csv'):
+    def _save_dataset(self, examples, format):
         df = pd.DataFrame({
             "storyid": (e.storyid for e in examples),
             "sentid": (e.sentid for e in examples),
@@ -106,6 +105,7 @@ class FactCC:
         elif format == 'parquet':
             write(
                 data=df,
+                row_group_offsets=5000000,
                 file_scheme="hive",
                 filename=self.dataset_dir,
                 compression='SNAPPY'
@@ -119,8 +119,8 @@ class FactCC:
             float_format='%.5f'
         )
 
-    def preprocess(self, stories, summaries, ids):
-        examples = self._create_examples(stories, summaries, ids)
+    def preprocess(self, ids, stories, summaries, format='csv'):
+        examples = self._create_examples(ids, stories, summaries)
         features = convert_examples_to_features(
             examples=examples,
             label_list=["CORRECT", "INCORRECT"],  # redundant, just so it works with the factCC code
@@ -137,7 +137,7 @@ class FactCC:
             pad_token_segment_id=0
         )
 
-        self._save_dataset(examples)
+        self._save_dataset(examples, format)
         torch.save(features, self.features_path)
 
     def run(self):
@@ -192,24 +192,17 @@ class FactCC:
 
 
 if __name__ == '__main__':
-    base = "/Users/Alexey.Shapovalov@ig.com/Projects/nuig/summarization-research/factCC/out"
-    path = os.path.join(base, datetime.now().strftime("%Y%m%d_%H%M"))
+    base = Path(__file__).parent.parent.resolve()
+    path = os.path.join(base, "evaluation", datetime.now().strftime("%Y%m%d_%H%M"))
+    # path = os.path.join(base, "evaluation", "20211107_1311")
     factCC = FactCC(
-        checkpoint="/Users/Alexey.Shapovalov@ig.com/Projects/nuig/summarization-research/factCC/checkpoint/factcc-checkpoint",
+        checkpoint=os.path.join(base, "checkpoint/factcc-checkpoint"),
         path=path,
         batch_size=512,
         max_seq_length=12,
         method="sentence"
     )
-    stories, summaries, identifiers = load("/Users/Alexey.Shapovalov@ig.com/Projects/nuig/summarization-research/data/cnndm/", 100)
-    factCC.preprocess(stories, summaries, identifiers)
-    score = factCC.run()
-    print(score)
-
-    # Add unit tests
-    # Prep for running on ICHEC
-
-#     # nlp = spacy.load('en')
-#     # neuralcoref.add_to_pipe(nlp)
-#     # story = nlp(story)
-#     # summary = nlp(summary)
+    ids, stories, summaries = load(os.path.join(base, "../data/cnndm/"), 10000)
+    factCC.preprocess(ids, stories, summaries, format='parquet')
+    # score = factCC.run()
+    # print(score)

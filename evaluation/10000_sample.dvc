@@ -1,0 +1,5 @@
+outs:
+- md5: fa1a94c1922fc27cab0978db71d302cd.dir
+  size: 391780024
+  nfiles: 4
+  path: 10000_sample
