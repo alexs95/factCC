@@ -17,6 +17,7 @@
 
 from __future__ import absolute_import, division, print_function
 
+from tqdm import tqdm
 import csv
 import logging
 import json
@@ -33,12 +34,14 @@ logger = logging.getLogger(__name__)
 class InputExample(object):
     """A single training/test example for simple sequence classification."""
 
-    def __init__(self, guid, text_a, text_b=None, label=None,
+    def __init__(self, storyid, claimid, sentid, text_a, text_b=None, label=None,
                  extraction_span=None, augmentation_span=None):
         """Constructs a InputExample.
 
         Args:
-            guid: Unique id for the example.
+            storyid: Story id (e.g. filename of story) for the example.
+            claimid: Claim id (e.g. sentence number in summary) for the example.
+            sentid: Sentence id (e.g. sentence number in story) for the example.
             text_a: string. The untokenized text of the first sequence. For single
             sequence tasks, only this sequence must be specified.
             text_b: (Optional) string. The untokenized text of the second sequence.
@@ -46,7 +49,9 @@ class InputExample(object):
             label: (Optional) string. The label of the example. This should be
             specified for train and dev examples, but not for test examples.
         """
-        self.guid = guid
+        self.storyid = storyid
+        self.sentid = sentid
+        self.claimid = claimid
         self.text_a = text_a
         self.text_b = text_b
         self.label = label
@@ -59,8 +64,11 @@ class InputFeatures(object):
 
     def __init__(self, input_ids, input_mask, segment_ids, label_id,
                  extraction_mask=None, extraction_start_ids=None, extraction_end_ids=None,
-                 augmentation_mask=None, augmentation_start_ids=None, augmentation_end_ids=None, identifier=None):
-        self.identifier = identifier
+                 augmentation_mask=None, augmentation_start_ids=None, augmentation_end_ids=None,
+                 storyid=None, claimid=None, sentid=None):
+        self.storyid = storyid
+        self.claimid = claimid
+        self.sentid = sentid
         self.input_ids = input_ids
         self.input_mask = input_mask
         self.segment_ids = segment_ids
@@ -139,7 +147,7 @@ class FactCCGeneratedProcessor(DataProcessor):
             augmentation_span = example["augmentation_span"]
 
             examples.append(
-                InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label,
+                InputExample(storyid=guid, text_a=text_a, text_b=text_b, label=label,
                              extraction_span=extraction_span, augmentation_span=augmentation_span))
         return examples
 
@@ -169,7 +177,7 @@ class FactCCManualProcessor(DataProcessor):
             text_a = example["text"]
             text_b = example["claim"]
             label = example["label"]
-            examples.append(InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label))
+            examples.append(InputExample(storyid=guid, text_a=text_a, text_b=text_b, label=label))
         return examples
 
 
@@ -196,9 +204,7 @@ def convert_examples_to_features(examples, label_list, max_seq_length,
     label_map = {label : i for i, label in enumerate(label_list)}
 
     features = []
-    for (ex_index, example) in enumerate(examples):
-        if ex_index % 10000 == 0:
-            logger.info("Writing example %d of %d" % (ex_index, len(examples)))
+    for (ex_index, example) in tqdm(enumerate(examples), "Preprocessing", total=len(examples)):
 
         tokens_a = tokenizer.tokenize(example.text_a)
 
@@ -306,7 +312,7 @@ def convert_examples_to_features(examples, label_list, max_seq_length,
 
         if ex_index < 3:
             logger.info("*** Example ***")
-            logger.info("guid: %s" % (example.guid))
+            logger.info("guid: %s" % (example.storyid))
             logger.info("tokens: %s" % " ".join([str(x) for x in tokens]))
             logger.info("input_ids: %s" % " ".join([str(x) for x in input_ids]))
             logger.info("input_mask: %s" % " ".join([str(x) for x in input_mask]))
@@ -334,7 +340,9 @@ def convert_examples_to_features(examples, label_list, max_seq_length,
                           augmentation_mask=augmentation_mask,
                           augmentation_start_ids=augmentation_start_ids,
                           augmentation_end_ids=augmentation_end_ids,
-                          identifier=example.guid
+                          storyid=example.storyid,
+                          claimid=example.claimid,
+                          sentid=example.sentid
             )
         )
     return features
