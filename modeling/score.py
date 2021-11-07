@@ -202,10 +202,11 @@ def parse_args():
     data = os.path.join(base, "../data/cnndm/")
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--gpu', dest='gpu', action='store_true', default=False)
+    parser.add_argument('--gpu', action='store_true', default=False)
     parser.add_argument('--data', type=str, help='Path to cnn/dm dataset.', default=data)
     parser.add_argument('--evaluation', type=str, help='Path to evaluation directory.', default=evaluation)
     parser.add_argument('--checkpoint', type=str, help='Path to factcc checkpoint directory.', default=checkpoint)
+    parser.add_argument('--sample', type=int, help='Number of stories to preprocess.', default=None)
     parser.add_argument('--mode', type=str, help='Evaluate or preprocess.', choices=["preprocess", "evaluate"])
 
     return parser.parse_args()
@@ -222,7 +223,7 @@ if __name__ == '__main__':
         method="sentence"
     )
     if args.mode == "preprocess":
-        ids, stories, summaries = load(args.data, 1000)
+        ids, stories, summaries = load(args.data, args.sample)
         factCC.preprocess(ids, stories, summaries, dataset_format='parquet')
     else:
         # Need to add a loading bar for loading the data.
