@@ -193,8 +193,8 @@ class FactCC:
 
 if __name__ == '__main__':
     base = Path(__file__).parent.parent.resolve()
-    path = os.path.join(base, "evaluation", datetime.now().strftime("%Y%m%d_%H%M"))
-    # path = os.path.join(base, "evaluation", "20211107_1311")
+    # path = os.path.join(base, "evaluation", datetime.now().strftime("%Y%m%d_%H%M"))
+    path = os.path.join(base, "evaluation", "10000_sample")
     factCC = FactCC(
         checkpoint=os.path.join(base, "checkpoint/factcc-checkpoint"),
         path=path,
@@ -202,7 +202,8 @@ if __name__ == '__main__':
         max_seq_length=12,
         method="sentence"
     )
-    ids, stories, summaries = load(os.path.join(base, "../data/cnndm/"), 10000)
-    factCC.preprocess(ids, stories, summaries, format='parquet')
-    # score = factCC.run()
-    # print(score)
+    # ids, stories, summaries = load(os.path.join(base, "../data/cnndm/"), 10000)
+    # factCC.preprocess(ids, stories, summaries, format='parquet')
+    # Need to add a loading bar for loading the data.
+    score = factCC.run()
+    print(score)
