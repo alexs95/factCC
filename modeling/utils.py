@@ -39,9 +39,9 @@ class InputExample(object):
         """Constructs a InputExample.
 
         Args:
-            storyid: Story id (e.g. filename of story) for the example.
-            claimid: Claim id (e.g. sentence number in summary) for the example.
-            sentid: Sentence id (e.g. sentence number in story) for the example.
+            storyid: Story id (e.g. filename of story) of the example.
+            claimid: Claim id (e.g. sentence number in summary) of the example.
+            sentid: Sentence id (e.g. sentence number in story) of the example.
             text_a: string. The untokenized text of the first sequence. For single
             sequence tasks, only this sequence must be specified.
             text_b: (Optional) string. The untokenized text of the second sequence.
@@ -135,7 +135,7 @@ class FactCCGeneratedProcessor(DataProcessor):
         """See base class."""
         return ["CORRECT", "INCORRECT"]
 
-    def _create_examples(self, lines, set_type):
+    def _create_examples(self, lines):
         """Creates examples for the training and dev sets."""
         examples = []
         for example in lines:
@@ -147,8 +147,11 @@ class FactCCGeneratedProcessor(DataProcessor):
             augmentation_span = example["augmentation_span"]
 
             examples.append(
-                InputExample(storyid=guid, text_a=text_a, text_b=text_b, label=label,
-                             extraction_span=extraction_span, augmentation_span=augmentation_span))
+                InputExample(
+                    storyid=guid, text_a=text_a, text_b=text_b, label=label,
+                    extraction_span=extraction_span, augmentation_span=augmentation_span
+                )
+            )
         return examples
 
 

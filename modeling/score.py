@@ -1,6 +1,6 @@
 from pytorch_transformers import (BertForSequenceClassification, BertTokenizer)
-from utils import convert_examples_to_features, InputExample
 from torch.utils.data import (DataLoader, SequentialSampler, TensorDataset)
+from utils import convert_examples_to_features, InputExample
 import torch.nn.functional as F
 from fastparquet import write
 from pathlib import Path
@@ -11,7 +11,6 @@ import argparse
 import torch
 import uuid
 import os
-
 
 MODEL_NAME = "bert-base-uncased"
 
@@ -50,21 +49,23 @@ class FactCC:
         if ids is None:
             ids = range(len(stories))
 
-        for storyid, story, summary in zip(ids, stories, summaries):
+        for storyid, story, summary in tqdm(zip(ids, stories, summaries), "Creating examples", total=len(stories)):
             for claimid, claim in enumerate(summary):
-                label = "CORRECT"  # redundant, just so it works with the factCC code
+                label = "CORRECT"  # redundant, just so it works with factCC code
                 if self.method == "sentence":
                     for sentid, sentence in enumerate(story):
                         text_a = sentence.strip()
                         text_b = claim.strip()
                         examples.append(
-                            InputExample(storyid=storyid, claimid=claimid, sentid=sentid, text_a=text_a, text_b=text_b, label=label)
+                            InputExample(storyid=storyid, claimid=claimid, sentid=sentid, text_a=text_a, text_b=text_b,
+                                         label=label)
                         )
                 else:
                     text_a = " ".join(s.strip() for s in story)
                     text_b = claim.strip()
                     examples.append(
-                        InputExample(storyid=storyid, claimid=claimid, sentid=0, text_a=text_a, text_b=text_b, label=label)
+                        InputExample(storyid=storyid, claimid=claimid, sentid=0, text_a=text_a, text_b=text_b,
+                                     label=label)
                     )
 
         return examples
@@ -177,8 +178,8 @@ class FactCC:
                 # Calculate and save batch scores
                 batch_scores = pd.DataFrame({
                     "storyid": storyids[count:count + len(preds)],
-                    "claimid": claimids[count:count+len(preds)],
-                    "sentid": sentids[count:count+len(preds)],
+                    "claimid": claimids[count:count + len(preds)],
+                    "sentid": sentids[count:count + len(preds)],
                     "score": preds[:, 0]
                 })
                 self._save_batch_scores(batch_scores)
@@ -200,13 +201,18 @@ def parse_args():
     evaluation = os.path.join(base, "evaluation", "1000_sample")
     checkpoint = os.path.join(base, "checkpoint/factcc-checkpoint")
     data = os.path.join(base, "../data/cnndm/")
+    articles = os.path.join(base, "../data/test_output/articles")
+    pointer_gen_cov = os.path.join(base, "../data/test_output/pointer-gen-cov")
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--gpu', action='store_true', default=False)
-    parser.add_argument('--data', type=str, help='Path to cnn/dm dataset.', default=data)
+    parser.add_argument('--paragraph', action='store_true', default=False)
+    parser.add_argument('--coref', action='store_true', default=False)
+    parser.add_argument('--cnndm', type=str, help='Path to cnn/dm dataset.', default=data)
+    parser.add_argument('--summaries', type=str, help='Path to decoded summaries.', default=pointer_gen_cov)
     parser.add_argument('--evaluation', type=str, help='Path to evaluation directory.', default=evaluation)
     parser.add_argument('--checkpoint', type=str, help='Path to factcc checkpoint directory.', default=checkpoint)
-    parser.add_argument('--sample', type=int, help='Number of stories to preprocess.', default=None)
+    parser.add_argument('--samples', type=int, help='Number of stories to preprocess.', default=None)
     parser.add_argument('--mode', type=str, help='Evaluate or preprocess.', choices=["preprocess", "evaluate"])
 
     return parser.parse_args()
@@ -218,13 +224,14 @@ if __name__ == '__main__':
         checkpoint=args.checkpoint,
         path=args.evaluation,
         gpu=args.gpu,
-        batch_size=512,
-        max_seq_length=12,
-        method="sentence"
+        batch_size=512,  # increase batch_size?
+        max_seq_length=12,  # need to understand does this matter?
+        method="sentence" if not args.paragraph else "paragraph"
     )
     if args.mode == "preprocess":
-        ids, stories, summaries = load(args.data, args.sample)
+        ids, stories, summaries = load(args.cnndm, args.summaries, args.coref, args.samples)
         factCC.preprocess(ids, stories, summaries, dataset_format='parquet')
+
     else:
         # Need to add a loading bar for loading the data.
         score = factCC.run()

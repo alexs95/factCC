@@ -6,11 +6,10 @@
 #SBATCH --mail-user=email@domain.com
 #SBATCH --mail-type=BEGIN,END
 
-module load cuda/11.2
 module load conda/2
 
 conda init
 source activate summarization3.6
 
 cd $SLURM_SUBMIT_DIR
-time python3 modeling/score.py --mode evaluate --evaluation
+taskfarm factcc-ichec-preprocess-taskfarm.sh
