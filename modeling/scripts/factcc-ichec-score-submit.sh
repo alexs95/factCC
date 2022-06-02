@@ -1,7 +1,7 @@
 #!/bin/sh
-#SBATCH -p ProdQ
+#SBATCH -p DevQ
 #SBATCH --nodes 1
-#SBATCH --time 08:00:00
+#SBATCH --time 01:00:00
 #SBATCH -A ngcom023c
 #SBATCH --mail-user=a.shapovalov1@nuigalway.ie
 #SBATCH --mail-type=ALL
@@ -13,4 +13,4 @@ conda init
 source activate summarization3.6
 
 cd $SLURM_SUBMIT_DIR
-taskfarm modeling/scripts/factcc-ichec-preprocess-taskfarm.sh
+taskfarm modeling/scripts/factcc-ichec-score-taskfarm.sh
