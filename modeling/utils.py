@@ -196,7 +196,8 @@ def convert_examples_to_features(examples, label_list, max_seq_length,
                                  pad_token_segment_id=0,
                                  sequence_a_segment_id=0,
                                  sequence_b_segment_id=1,
-                                 mask_padding_with_zero=True):
+                                 mask_padding_with_zero=True,
+                                 loader=True):
     """ Loads a data file into a list of `InputBatch`s
         `cls_token_at_end` define the location of the CLS token:
             - False (Default, BERT/XLM pattern): [CLS] + A + [SEP] + B + [SEP]
@@ -207,7 +208,12 @@ def convert_examples_to_features(examples, label_list, max_seq_length,
     label_map = {label : i for i, label in enumerate(label_list)}
 
     features = []
-    for (ex_index, example) in tqdm(enumerate(examples), "Preprocessing", total=len(examples)):
+    if loader:
+        example_iterable = tqdm(enumerate(examples), "Preprocessing", total=len(examples))
+    else:
+        example_iterable = enumerate(examples)
+
+    for (ex_index, example) in example_iterable:
 
         tokens_a = tokenizer.tokenize(example.text_a)
 

@@ -1,10 +1,9 @@
 from pytorch_transformers import (BertForSequenceClassification, BertTokenizer)
-from torch.utils.data import (DataLoader, SequentialSampler, TensorDataset)
-from utils import convert_examples_to_features, InputExample
+from torch.utils.data import (DataLoader, SequentialSampler, TensorDataset) from modeling.utils import convert_examples_to_features, InputExample
 import torch.nn.functional as F
 from fastparquet import write
 from pathlib import Path
-from loader import load
+from modeling.loader import load
 from tqdm import tqdm
 import pandas as pd
 import argparse
@@ -16,16 +15,26 @@ MODEL_NAME = "bert-base-uncased"
 
 
 class FactCC:
-    def __init__(self, checkpoint, path, batch_size, max_seq_length, gpu, method="sentence"):
+    def __init__(self, checkpoint, path, batch_size, max_seq_length, gpu, method="sentence", preload=False):
         self.checkpoint = checkpoint
         self.batch_size = batch_size
         self.max_seq_length = max_seq_length
         self.method = method
 
-        # Configure GPU
+        # Configure GPU and load model
         self.gpu = None
         if gpu:
             self.gpu = torch.cuda.current_device()
+        self.tokenizer = BertTokenizer.from_pretrained(MODEL_NAME)
+        if preload:
+            # Load model
+            self.loaded = True
+            self.model = BertForSequenceClassification.from_pretrained(self.checkpoint)
+            self.model.to(self.gpu)
+        else:
+            # Load model
+            self.loaded = False
+            self.model = None
 
         # Configure paths
         self.path = path
@@ -35,9 +44,6 @@ class FactCC:
         self.scores_dir = os.path.join(self.path, "scores")
         self._create_dirs()
 
-        # Load model
-        self.tokenizer = BertTokenizer.from_pretrained(MODEL_NAME)
-        self.model = None
 
     def _create_dirs(self):
         Path(self.features_dir).mkdir(parents=True, exist_ok=True)
@@ -49,7 +55,7 @@ class FactCC:
         if ids is None:
             ids = range(len(stories))
 
-        for storyid, story, summary in tqdm(zip(ids, stories, summaries), "Creating examples", total=len(stories)):
+        for storyid, story, summary in zip(ids, stories, summaries):
             for claimid, claim in enumerate(summary):
                 label = "CORRECT"  # redundant, just so it works with factCC code
                 if self.method == "sentence":
@@ -145,6 +151,69 @@ class FactCC:
         self._save_dataset(examples, dataset_format)
         torch.save(features, self.features_path)
 
+    def score(self, stories, summaries):
+        examples = self._create_examples(None, stories, summaries)
+        features = convert_examples_to_features(
+            examples=examples,
+            label_list=["CORRECT", "INCORRECT"],  # redundant, just so it works with the factCC code
+            max_seq_length=self.max_seq_length,
+            tokenizer=self.tokenizer,
+            output_mode="classification",
+            cls_token_at_end=False,
+            cls_token=self.tokenizer.cls_token,
+            cls_token_segment_id=0,
+            sep_token=self.tokenizer.sep_token,
+            sep_token_extra=False,
+            pad_on_left=False,
+            pad_token=self.tokenizer.convert_tokens_to_ids([self.tokenizer.pad_token])[0],
+            pad_token_segment_id=0,
+            loader=False
+        )
+
+        dataset, storyids, claimids, sentids = self._to_tensor_dataset(features)
+        sampler = SequentialSampler(dataset)
+        dataloader = DataLoader(dataset, sampler=sampler, batch_size=self.batch_size)
+
+        # Evaluate batches
+        count = 0
+        scores = None
+        for batch in dataloader:
+            self.model.eval()
+            batch = tuple(example.to(self.gpu) for example in batch)
+
+            with torch.no_grad():
+                inputs = {
+                    'input_ids': batch[0],
+                    'attention_mask': batch[1],
+                    'token_type_ids': batch[2],
+                    'labels': batch[3]
+                }
+                outputs = self.model(**inputs)
+                logits = outputs[1]
+                logits = F.softmax(logits, dim=1)
+                preds = logits.detach().cpu().numpy()
+
+                # Calculate and save batch scores
+                batch_scores = pd.DataFrame({
+                    "storyid": storyids[count:count + len(preds)],
+                    "claimid": claimids[count:count + len(preds)],
+                    "sentid": sentids[count:count + len(preds)],
+                    "score": preds[:, 0]
+                })
+
+                # Append to overall scores
+                batch_scores = batch_scores.groupby(['storyid', 'claimid']).max()
+                if scores is None:
+                    scores = batch_scores
+                else:
+                    scores = scores.append(batch_scores)
+
+                count += len(preds)
+
+        # print(scores.groupby(['storyid', 'claimid']).max().groupby(['storyid']).mean()['score'].mean())
+        # print(scores.groupby(['storyid', 'claimid']).max()['score'].mean())
+        return scores.groupby(['storyid', 'claimid']).max().groupby(['storyid']).mean()['score'].reset_index(drop=True)
+
     def run(self):
         # Load model
         self.model = BertForSequenceClassification.from_pretrained(self.checkpoint)
@@ -236,3 +305,18 @@ if __name__ == '__main__':
         # Need to add a loading bar for loading the data.
         score = factCC.run()
         print(score)
+
+    # TESTING score function:
+    # args = parse_args()
+    # factCC = FactCC(
+    #     checkpoint=args.checkpoint,
+    #     path=args.evaluation,
+    #     gpu=args.gpu,
+    #     batch_size=512,  # increase batch_size?
+    #     max_seq_length=12,  # need to understand does this matter?
+    #     method="sentence" if not args.paragraph else "paragraph",
+    #     preload=True
+    # )
+    # print(factCC.score(
+    #     [["John went to the shop.", "Mary loves to work!"], ["John went to the shop.", "Mary loves to work!"]],
+    #     [["John did not go shop."], ["Mary loves working.", "John loves shopping!"]]))
