@@ -1,5 +1,6 @@
 from pytorch_transformers import (BertForSequenceClassification, BertTokenizer)
-from torch.utils.data import (DataLoader, SequentialSampler, TensorDataset) from modeling.utils import convert_examples_to_features, InputExample
+from torch.utils.data import (DataLoader, SequentialSampler, TensorDataset)
+from modeling.utils import convert_examples_to_features, InputExample
 import torch.nn.functional as F
 from fastparquet import write
 from pathlib import Path
@@ -15,7 +16,7 @@ MODEL_NAME = "bert-base-uncased"
 
 
 class FactCC:
-    def __init__(self, checkpoint, path, batch_size, max_seq_length, gpu, method="sentence", preload=False):
+    def __init__(self, checkpoint, path, batch_size, max_seq_length, gpu_num, method="sentence", preload=False):
         self.checkpoint = checkpoint
         self.batch_size = batch_size
         self.max_seq_length = max_seq_length
@@ -23,8 +24,10 @@ class FactCC:
 
         # Configure GPU and load model
         self.gpu = None
-        if gpu:
-            self.gpu = torch.cuda.current_device()
+        if gpu_num:
+            self.gpu = torch.cuda.get_device_name(int(gpu_num))
+            print(self.gpu)
+            print(torch.cuda.current_device())
         self.tokenizer = BertTokenizer.from_pretrained(MODEL_NAME)
         if preload:
             # Load model
@@ -274,7 +277,7 @@ def parse_args():
     pointer_gen_cov = os.path.join(base, "../data/test_output/pointer-gen-cov")
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--gpu', action='store_true', default=False)
+    parser.add_argument('--gpu_num', action='store_true', default=False)
     parser.add_argument('--paragraph', action='store_true', default=False)
     parser.add_argument('--coref', action='store_true', default=False)
     parser.add_argument('--cnndm', type=str, help='Path to cnn/dm dataset.', default=data)
@@ -292,9 +295,9 @@ if __name__ == '__main__':
     factCC = FactCC(
         checkpoint=args.checkpoint,
         path=args.evaluation,
-        gpu=args.gpu,
-        batch_size=512,  # increase batch_size?
-        max_seq_length=12,  # need to understand does this matter?
+        gpu_num=args.gpu_num,
+        batch_size=512,
+        max_seq_length=12,
         method="sentence" if not args.paragraph else "paragraph"
     )
     if args.mode == "preprocess":
