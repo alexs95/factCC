@@ -28,7 +28,6 @@ class FactCC:
             self.gpu = torch.cuda.get_device_name(int(gpu_num))
             print(self.gpu)
             print(torch.cuda.current_device())
-        self.tokenizer = BertTokenizer.from_pretrained(MODEL_NAME)
         if preload:
             # Load model
             self.loaded = True
@@ -38,6 +37,9 @@ class FactCC:
             # Load model
             self.loaded = False
             self.model = None
+
+        self.tokenizer = BertTokenizer.from_pretrained(MODEL_NAME)
+        print(self.tokenizer)
 
         # Configure paths
         self.path = path
